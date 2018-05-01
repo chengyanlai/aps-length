@@ -21,13 +21,14 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 """
 
-from __future__ import print_function, unicode_literals
+from __future__ import unicode_literals
 import glob
 import optparse
 import os
 import sys
 import subprocess
 import io
+import locale
 
 word_limit = {'PRL':    3750,
               'PRX':    20000,
@@ -451,7 +452,7 @@ def count_figures_words(detex_lines, tex_lines, opts):
             identify = subprocess.Popen(['identify', filename],
                                         stdout=subprocess.PIPE)
             out, err = identify.communicate()
-            fields = out.decode(preferred_encoding).split()
+            fields = out.decode(opts.encoding).split()
             width, height = fields[2].split('x')
             width = float(width)
             height = float(height)
@@ -461,7 +462,7 @@ def count_figures_words(detex_lines, tex_lines, opts):
                                   stdin=img_f, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             out, err = gs.communicate()
             img_f.close()
-            bbox = err.decode(preferred_encoding).split('\n')[0].split()
+            bbox = err.decode(opts.encoding).split('\n')[0].split()
             width = float(bbox[3])
             height = float(bbox[4])
         else:
@@ -504,14 +505,14 @@ def process(tex_file, opts):
     detex = subprocess.Popen(['detex', '-e', opts.env, tex_file],
                              stdout=subprocess.PIPE)
     out, err = detex.communicate()
-    detex_lines = out.decode(preferred_encoding).strip().split('\n')
+    detex_lines = out.decode(opts.encoding).strip().split('\n')
 
     tex_lines = io.open(tex_file).readlines()
 
     abstract_chars = count_chars_abstract(tex_lines)
-    print()
+    print("")
     print('Abstract:    %6d chars (max 600)' % abstract_chars)
-    print()
+    print("")
 
     if opts.method == 'detex':
         main_text_words = count_main_text_words_detex(detex_lines, tex_lines)
@@ -524,13 +525,13 @@ def process(tex_file, opts):
     table_words = count_tables_words(tex_lines)
     total_words = (main_text_words + eqn_words + fig_words + table_words)
 
-    print()
+    print("")
     print('Main text:      %6d words' % main_text_words)
     print('Displayed Math: %6d words' % eqn_words)
     print('Figures:        %6d words' % fig_words)
     print('Tables:         %6d words' % table_words)
     print('TOTAL:          %6d words' % total_words)
-    print()
+    print("")
     if opts.journal=='None':
         print('Manuscript %s is currently %d words long'%(tex_file,total_words))
     else:
@@ -544,42 +545,41 @@ def process(tex_file, opts):
             float(total_words - wl)/wl*100., over_under,
             wl, opts.journal))
 
+if __name__ == '__main__':
+    parser = optparse.OptionParser(usage='python %prog [options] tex-files',
+                                description="""
+    Count length of an APS manuscript formatted in LaTeX, following
+    guidelines described at http://journals.aps.org/authors/length-guide""")
 
-parser = optparse.OptionParser(usage='%prog [options] tex-files',
-                               description="""
-Count length of an APS manuscript formatted in LaTeX, following
-guidelines described at http://journals.aps.org/authors/length-guide""")
+    parser.add_option('-v', '--var', metavar='key value', nargs=2, action='append',
+                      help='Define TeX variables e.g. to specify location of figure files.')
+    parser.add_option('-e', '--env', metavar='env1,env2,...',
+                      help='Comma-separated list of LaTeX environments to ignore.',
+                      default='abstract,acknowledgments,acknowledgements,displaymath,equation,eqnarray,thebibliography')
+    parser.add_option('-m', '--method', metavar='(detex | wordcount)', default='wordcount',
+                      help='''Tool to use to count words in main text. Default is wordcount.
+                              detex is also supported (but tends to underestimate word count).''')
+    parser.add_option('-f', '--figs', metavar='(identify | gs)',
+                      help='''Tool to use to extract bounding box from figure.
+                              The default is identify, which works for png, pdf, eps, and most image formats, but requires
+                              ImageMagick to be installed. The other option is gs, which works with eps and pdf mages.''',
+                      default='identify')
+    parser.add_option('--scale-figs', type=float, default=1.1,
+                      help='Scale estimate of figure word counts by factor, default 1.1 (10%)')
+    parser.add_option('-j', '--journal', metavar='PRL', default='PRL',
+                      help='Journal abbreviation (e.g. None, PRL, PRB-RC)')
+    parser.add_option('-l', '--latex', default='pdflatex',
+                      help='Latex executable. Default is "pdflatex".')
+    parser.add_option('--encoding', metavar='utf-8', default=locale.getpreferredencoding(),
+                      help='Prefer encoding to use. Default to determine by locale.getpreferredencoding()')
 
-parser.add_option('-v', '--var', metavar='key value', nargs=2, action='append',
-                help='Define TeX variables e.g. to specify location of figure files.')
-parser.add_option('-e', '--env', metavar='env1,env2,...',
-                help='Comma-separated list of LaTeX environments to ignore.',
-                default='abstract,acknowledgments,acknowledgements,displaymath,equation,eqnarray,thebibliography')
-parser.add_option('-m', '--method', metavar='(detex | wordcount)', default='wordcount',
-                  help='''Tool to use to count words in main text. Default is wordcount.
-detex is also supported (but tends to underestimate word count).''')
-parser.add_option('-f', '--figs', metavar='(identify | gs)',
-                  help='''Tool to use to extract bounding box from figure.
-The default is identify, which works for png, pdf, eps, and most image formats, but requires 
-ImageMagick to be installed. The other option is gs, which works with eps and pdf mages.''',
-                  default='identify')
-parser.add_option('--scale-figs', type=float, default=1.1,
-                  help='Scale estimate of figure word counts by factor, default 1.1 (10%)')
-parser.add_option('-j', '--journal', metavar='PRL', default='None',
-                  help='Journal abbreviation (e.g. None, PRL, PRB-RC)')
-parser.add_option('-l', '--latex', default='pdflatex',
-                  help='Latex executable. Default is "pdflatex".')
+    opts, args = parser.parse_args()
 
-import locale
-preferred_encoding = locale.getpreferredencoding()
+    orig_eps_pdf_files = glob.glob('*-eps-converted-to.pdf')
 
-opts, args = parser.parse_args()
+    for tex_file in args:
+        process(tex_file, opts)
 
-orig_eps_pdf_files = glob.glob('*-eps-converted-to.pdf')
-
-for tex_file in args:
-    process(tex_file, opts)
-
-for eps_pdf_file in glob.glob('*-eps-converted-to.pdf'):
-    if eps_pdf_file not in orig_eps_pdf_files:
-        os.remove(delname)
+    for eps_pdf_file in glob.glob('*-eps-converted-to.pdf'):
+        if eps_pdf_file not in orig_eps_pdf_files:
+            os.remove(delname)

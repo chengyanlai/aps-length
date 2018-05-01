@@ -21,7 +21,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 """
 
-from __future__ import unicode_literals
 import glob
 import optparse
 import os
@@ -321,11 +320,11 @@ def count_main_text_words_wordcount(tex_lines, opts):
     # FIXME - Commenting out the rows (but not the caption) of any tables
 
     tmp_tex_file = io.open('tmp_tex_file.tex', 'w')
-    tmp_tex_file.writelines(line for line in mod_tex_lines)
+    tmp_tex_file.writelines(unicode(line) for line in mod_tex_lines)
     tmp_tex_file.close()
 
     wordcount_tex_file = io.open('wordcount.tex', 'w')
-    wordcount_tex_file.write(wordcount_tex_contents)
+    wordcount_tex_file.write(unicode(wordcount_tex_contents))
     wordcount_tex_file.close()
 
     os.system('%s tmp_tex_file > /dev/null 2>&1' % opts.latex)
@@ -503,7 +502,7 @@ def count_chars_abstract(tex_lines):
 def process(tex_file, opts):
     print('Processing TeX file: %s\n' % tex_file)
     detex = subprocess.Popen(['detex', '-e', opts.env, tex_file],
-                             stdout=subprocess.PIPE)
+                              stdout=subprocess.PIPE)
     out, err = detex.communicate()
     detex_lines = out.decode(opts.encoding).strip().split('\n')
 
